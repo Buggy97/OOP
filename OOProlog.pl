@@ -30,6 +30,13 @@ replace_occurrence_method(Subterm0, Subterm, Method0, Method) :-
             replace_occurrence_list(Subterm0, Subterm, Clauses, NClauses),
             Method =.. [Name|NClauses].
                             */
+is_valid_parents([]) :- !.
+is_valid_parents([Parent1|Parents]) :- Goal =.. [Parent1, P1P, Attribs],
+                                       clause(Goal, _),
+                                       call(Goal),
+                                       is_list(P1P),
+                                       is_list(Attribs),
+                                       is_valid_parents(Parents).
 
 atomic_list([]).
 atomic_list([X|T]) :- atomic(X), atomic_list(T).
@@ -41,13 +48,14 @@ indexOf([_|Tail], Element, Index):-
   Index is Index1+1.
 
 get_slot(Slot, Name, Value) :-  term_to_atom(Slot, A),
-                                    atom_chars(A, L),
-                                    indexOf(L, =, H),
-                                    sub_atom(A, 0, H, J, Name_),
-                                    HN is (H+1), JN is (J-1),
-                                    sub_atom(A, HN, JN, 0, Value_),
-                                    term_to_atom(Name, Name_),
-                                    term_to_atom(Value, Value_).
+                                atom_chars(A, L),
+                                indexOf(L, =, H),
+                                sub_atom(A, 0, H, J, Name_),
+                                HN is (H+1), JN is (J-1),
+                                sub_atom(A, HN, JN, 0, Value_),
+                                term_to_atom(Name, Name_),
+                                term_to_atom(Value, Value_).
+                        
 get_slots([],[],[]).
 get_slots([First|Rest], [FirstName|RestNames], [FirstValue|RestValues]) :-
             get_slot(First, FirstName, FirstValue),
@@ -57,13 +65,17 @@ build_class_methods(Class) :-
         get_attribs([Class], Attribs),
         build_method_list(Class, Attribs).
 
+build_class_methods(Class, Attribs) :- 
+        build_method_list(Class, Attribs).
+
 def_class(Name, Parents, Slots) :-  get_slots(Slots, Names, _),
                                     atomic_list(Names),
                                     atomic_list(Parents),
+                                    is_valid_parents(Parents),
                                     Class =.. [Name, Parents, Slots],
                                     abolish(Name, 2),
                                     asserta(Class),
-                                    build_class_methods(Name).
+                                    build_class_methods(Name, Slots).
 
 replace(Subterm0, Subterm, Term0, Term) :- 
             Term0 == Subterm0 -> Term = Subterm.
@@ -82,6 +94,8 @@ get_attribs([Class|RClass], NAttrib) :-
         Goal =.. [Class, NClass, Attrib],
         clause(Goal, _),
         call(Goal),
+        is_list(Attrib),
+        is_list(NClass),
         append(NClass, RClass, FClass),
         get_attribs(FClass, Rest),
         append(Attrib, Rest, NAttrib).
@@ -112,25 +126,28 @@ list_to_set(Dict, [X|T], [X|TN]) :-
     
 instance_of(Instance, Class) :-
         atom(Instance),
-        Goal =.. [Instance, Class, _],
+        Goal =.. [Instance, Class, Attribs],
+        clause(Goal, _),
         call(Goal).
 
 instance_of(Instance, Class) :-
         compound(Instance),
         Instance =.. [_, Class, _].
-    
+
 getv(Instance, Slot, Val) :-
             atom(Instance),
-            Goal =.. [Instance, _, Slots],
+            Goal =.. [Instance, Class, Slots],
             Var =.. [=, Slot, Val],
             clause(Goal, _),
             call(Goal),
+            atom(Class),
             member(Var, Slots),
             !.
 
 getv(Goal, Slot, Val) :-
             compound(Goal),
-            Goal =.. [_, _, Slots],
+            Goal =.. [_, Class, Slots],
+            atom(Class),
             Var =.. [=, Slot, Val],
             member(Var, Slots).
 
@@ -172,10 +189,15 @@ build_method_list(Class, [Slot|RSlots]) :-
 
 build_methods(Instance) :-
         Goal =.. [Instance, Class, Slots],
+        clause(Goal, _),
         call(Goal),
         build_method_list(Class, Slots).
 
+build_methods(Class, Slots) :-
+        build_method_list(Class, Slots).
+
 new(InstanceName, Class, Slots) :-
+        write(1),
         get_attribs([Class], Attribs),
         %%%%reverse(Attribs1, Attribs),
         split_id(Attribs, SplitAttribs),
@@ -184,22 +206,34 @@ new(InstanceName, Class, Slots) :-
         append(Slots, Attribs, Members),
         list_to_set([], Members, FinalMemmbers),
         Instance =.. [InstanceName, Class, FinalMemmbers],
-        abolish(InstanceName, 2),
+        ToYeet =.. [InstanceName, C, K],
+        clause(ToYeet, _),
+        write(1),
+        call(ToYeet),
+        atom(C),
+        is_list(K),
+        atom(C),
+        is_list(K),
+        retract(ToYeet),
         asserta(Instance),
-        build_methods(InstanceName), 
+        build_methods(Class, FinalMemmbers),
+        !.
+
+new(InstanceName, Class, Slots) :-
+        write(2),
+        get_attribs([Class], Attribs),
+        %%%%reverse(Attribs1, Attribs),
+        split_id(Attribs, SplitAttribs),
+        split_id(Slots, SplitSlots),
+        in_list(SplitAttribs, SplitSlots),
+        append(Slots, Attribs, Members),
+        list_to_set([], Members, FinalMemmbers),
+        Instance =.. [InstanceName, Class, FinalMemmbers],
+        asserta(Instance),
+        build_methods(Class, FinalMemmbers),
         !.
     
 new(InstanceName, Class) :-
-        Slots = [],
-        get_attribs([Class], Attribs),
-        %%%%reverse(Attribs1, Attribs),
-        split_id(Attribs, SplitAttribs),
-        split_id(Slots, SplitSlots),
-        in_list(SplitAttribs, SplitSlots),
-        append(Slots, Attribs, Members),
-        list_to_set([], Members, FinalMemmbers),
-        Instance =.. [InstanceName, Class, FinalMemmbers],
-        abolish(InstanceName, 2),
-        asserta(Instance),
-        build_methods(InstanceName).
+        new(InstanceName, Class, []),
+        !.
     
