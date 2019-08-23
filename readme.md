@@ -25,17 +25,17 @@ OOΠ-Prolog was developed and tested on SWI-Prolog.
 Class definition
 
 ```prolog
-def_class(className, [parent1, parent2], [slot1 = "definition1", slot2 = method([MethodArg1, MethodArgN], (write(MethodArg1), ...))])
+def_class(ClassName, [parent1, parent2], [slot1 = "definition1", slot2 = method([MethodArg1, MethodArgN], (write(MethodArg1), ...))])
 ```
 
 Class instatiation
 
 ```prolog
-new(objectName, className, [slot1 = 'slot1Val', slotN = 'slotNVal'])
+new(ObjectName, ClassName, [slot1 = 'slot1Val', slotN = 'slotNVal'])
 ```
 
 Getter
 
 ```prolog
-getv(objectName, SlotName, SlotValue).
+getv(ObjectName, SlotName, SlotValue).
 ```
